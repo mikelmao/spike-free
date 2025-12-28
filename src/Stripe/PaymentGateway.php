@@ -376,4 +376,137 @@ class PaymentGateway implements PaymentGatewayContract
     {
         return Cashier::stripe();
     }
+
+    // =========================================================================
+    // License Quantity Management
+    // =========================================================================
+
+    /**
+     * Add license quantity to the subscription.
+     * Creates or increments a subscription item for the license type.
+     *
+     * @param string $priceId The Stripe price ID for the license type
+     * @param int $quantity Number of licenses to add
+     * @return bool Whether the operation was successful
+     */
+    public function addLicenseQuantity(string $priceId, int $quantity = 1): bool
+    {
+        $subscription = $this->getSubscription();
+
+        if (! $subscription || ! $subscription->valid()) {
+            return false;
+        }
+
+        $existingItem = $subscription->items->first(function ($item) use ($priceId) {
+            return $item->stripe_price === $priceId;
+        });
+
+        if ($existingItem) {
+            // Increment existing item quantity
+            $newQuantity = $existingItem->quantity + $quantity;
+            $existingItem->updateQuantity($newQuantity);
+        } else {
+            // Add new subscription item
+            $subscription->addPrice($priceId, $quantity);
+        }
+
+        return true;
+    }
+
+    /**
+     * Remove license quantity from the subscription.
+     * Decrements or removes a subscription item for the license type.
+     *
+     * @param string $priceId The Stripe price ID for the license type
+     * @param int $quantity Number of licenses to remove
+     * @return bool Whether the operation was successful
+     */
+    public function removeLicenseQuantity(string $priceId, int $quantity = 1): bool
+    {
+        $subscription = $this->getSubscription();
+
+        if (! $subscription || ! $subscription->valid()) {
+            return false;
+        }
+
+        $existingItem = $subscription->items->first(function ($item) use ($priceId) {
+            return $item->stripe_price === $priceId;
+        });
+
+        if (! $existingItem) {
+            return false;
+        }
+
+        $newQuantity = max(0, $existingItem->quantity - $quantity);
+
+        if ($newQuantity === 0) {
+            // Remove the subscription item entirely
+            $subscription->removePrice($priceId);
+        } else {
+            // Decrement the quantity
+            $existingItem->updateQuantity($newQuantity);
+        }
+
+        return true;
+    }
+
+    /**
+     * Set the exact license quantity on the subscription.
+     *
+     * @param string $priceId The Stripe price ID for the license type
+     * @param int $quantity Exact number of licenses to set
+     * @return bool Whether the operation was successful
+     */
+    public function setLicenseQuantity(string $priceId, int $quantity): bool
+    {
+        $subscription = $this->getSubscription();
+
+        if (! $subscription || ! $subscription->valid()) {
+            return false;
+        }
+
+        $existingItem = $subscription->items->first(function ($item) use ($priceId) {
+            return $item->stripe_price === $priceId;
+        });
+
+        if ($quantity === 0) {
+            // Remove the subscription item if it exists
+            if ($existingItem) {
+                $subscription->removePrice($priceId);
+            }
+
+            return true;
+        }
+
+        if ($existingItem) {
+            // Update existing item quantity
+            $existingItem->updateQuantity($quantity);
+        } else {
+            // Add new subscription item
+            $subscription->addPrice($priceId, $quantity);
+        }
+
+        return true;
+    }
+
+    /**
+     * Get the current license quantity for a price ID.
+     *
+     * @param string $priceId The Stripe price ID for the license type
+     * @return int Current quantity (0 if not found)
+     */
+    public function getLicenseQuantity(string $priceId): int
+    {
+        $subscription = $this->getSubscription();
+
+        if (! $subscription || ! $subscription->valid()) {
+            return 0;
+        }
+
+        $existingItem = $subscription->items->first(function ($item) use ($priceId) {
+            return $item->stripe_price === $priceId;
+        });
+
+        return $existingItem?->quantity ?? 0;
+    }
 }

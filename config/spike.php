@@ -1,8 +1,25 @@
 <?php
 
 use Opcodes\Spike\CreditAmount;
+use Opcodes\Spike\LicenseEntitlement;
 
 return [
+
+    /*
+    |--------------------------------------------------------------------------
+    | Model Classes
+    |--------------------------------------------------------------------------
+    |
+    | Here you can specify custom model classes to use for Spike's internal
+    | models. This is useful when you need to add traits or customize the
+    | models (e.g., for multi-tenancy with CentralConnection trait).
+    |
+    */
+
+    'models' => [
+        'license_pool' => \App\Models\LicensePool::class,
+        'license_allocation' => \App\Models\LicenseAllocation::class,
+    ],
 
     /*
     |--------------------------------------------------------------------------
@@ -135,6 +152,59 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | License types
+    |--------------------------------------------------------------------------
+    |
+    | License types define allocatable entitlements that can be included with
+    | subscription plans or purchased separately. Unlike credits which are
+    | consumed, licenses are allocated to entities and can be released.
+    |
+    | Each license type can optionally bundle other license types. For example,
+    | a CM Instance license might bundle 3 Agent Seat licenses.
+    |
+    */
+
+    'license_types' => [
+        // [
+        //     // ID is used when referencing the license type in code
+        //     'id' => 'cm_instance',
+        //
+        //     // Human-readable name (or translation key)
+        //     'name' => 'Conversational Manager Instance',
+        //     // 'translation_key' => 'spike::translations.cm_instance',
+        //
+        //     // Icon URL for the license type (optional)
+        //     'icon' => null,
+        //
+        //     // Stripe price ID for purchasing additional licenses
+        //     'stripe_price_id' => env('SPIKE_LICENSE_CM_INSTANCE_PRICE_ID'),
+        //
+        //     // Price in cents for display purposes
+        //     'price_in_cents' => 30_00,
+        //
+        //     // Model class that this license can be allocated to (optional)
+        //     'allocatable_class' => 'App\\Models\\ClientCompany',
+        //
+        //     // Bundled licenses: [license_type_id => quantity_per_license]
+        //     // When a CM Instance is provisioned, 3 Agent Seats are bundled
+        //     'bundles' => [
+        //         'agent_seat' => 3,
+        //     ],
+        // ],
+        //
+        // [
+        //     'id' => 'agent_seat',
+        //     'name' => 'Agent Seat',
+        //     'icon' => null,
+        //     'stripe_price_id' => env('SPIKE_LICENSE_AGENT_SEAT_PRICE_ID'),
+        //     'price_in_cents' => 10_00,
+        //     'allocatable_class' => 'App\\Models\\User',
+        //     'bundles' => [],
+        // ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Process soft-deleted carts
     |--------------------------------------------------------------------------
     |
@@ -191,8 +261,27 @@ return [
             ],
             'provides_monthly' => [
                 CreditAmount::make(5_000),
+                // LicenseEntitlement::make(1, 'cm_instance'),  // Include 1 CM Instance license
             ],
         ],
+
+        // Example plan with license entitlements:
+        // [
+        //     'id' => 'pro',
+        //     'name' => 'Pro',
+        //     'short_description' => 'Professional plan with Conversational Manager',
+        //     'payment_provider_price_id_monthly' => env('SPIKE_PROVIDER_PRICE_ID_PRO_MONTHLY'),
+        //     'price_in_cents_monthly' => 99_00,
+        //     'features' => [
+        //         'Everything in Standard',
+        //         '1 Conversational Manager Instance',
+        //         '3 Agent Seats included',
+        //     ],
+        //     'provides_monthly' => [
+        //         CreditAmount::make(10_000),
+        //         LicenseEntitlement::make(1, 'cm_instance'),  // Includes 1 CM Instance + 3 bundled Agent Seats
+        //     ],
+        // ],
 
         //
     ],

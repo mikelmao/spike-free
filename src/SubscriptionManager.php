@@ -12,7 +12,9 @@ use Opcodes\Spike\Events\SubscriptionCancelled;
 use Opcodes\Spike\Events\SubscriptionDeactivated;
 use Opcodes\Spike\Events\SubscriptionResumed;
 use Opcodes\Spike\Exceptions\InvalidSubscriptionPlanException;
+use Opcodes\Spike\Exceptions\OverAllocationException;
 use Opcodes\Spike\Facades\Credits;
+use Opcodes\Spike\Facades\Licenses;
 use Opcodes\Spike\Facades\PaymentGateway;
 use Opcodes\Spike\Traits\ScopedToBillable;
 
@@ -29,6 +31,7 @@ class SubscriptionManager
      * @throws \Laravel\Cashier\Exceptions\SubscriptionUpdateFailure
      * @throws \Laravel\Cashier\Exceptions\IncompletePayment|\Exception
      * @throws \Stripe\Exception\CardException
+     * @throws OverAllocationException
      */
     public function subscribeTo(SubscriptionPlan $plan, bool $requirePaymentCard = true): ?SpikeSubscription
     {
@@ -38,6 +41,9 @@ class SubscriptionManager
 
         $billable = $this->getBillable();
         $currentSubscriptionPlan = $billable->currentSubscriptionPlan();
+
+        // Validate license allocation before switching plans
+        $this->validateLicenseAllocationForPlanSwitch($plan);
 
         if ($this->isSubscribed() && $plan->isFree()) {
             return $this->cancelSubscription();
@@ -206,5 +212,37 @@ class SubscriptionManager
         event(new SubscriptionResumed($billable, $billable->currentSubscriptionPlan()));
 
         return $subscription;
+    }
+
+    /**
+     * Check if the billable can switch to a new subscription plan.
+     * Returns validation result with any blocking issues.
+     *
+     * @param SubscriptionPlan $plan The plan to switch to
+     * @return array{can_switch: bool, issues: array}
+     */
+    public function canSwitchToPlan(SubscriptionPlan $plan): array
+    {
+        $newPlanLicenses = LicenseManager::extractLicensesFromPlan($plan);
+
+        return Licenses::billable($this->getBillable())->canSwitchToPlan($newPlanLicenses);
+    }
+
+    /**
+     * Validate that the billable can switch to the new plan without over-allocation.
+     *
+     * @param SubscriptionPlan $plan The plan to switch to
+     * @throws OverAllocationException If switching would cause over-allocation
+     */
+    protected function validateLicenseAllocationForPlanSwitch(SubscriptionPlan $plan): void
+    {
+        $validation = $this->canSwitchToPlan($plan);
+
+        if (! $validation['can_switch']) {
+            $firstIssue = $validation['issues'][0] ?? null;
+            $message = $firstIssue['message'] ?? 'Cannot switch plan due to license over-allocation.';
+
+            throw new OverAllocationException($message);
+        }
     }
 }

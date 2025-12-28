@@ -70,10 +70,14 @@ trait ManagesSubscriptions
             return $freePlan ?: SubscriptionPlan::defaultFreePlan();
         }
 
-        return Spike::findSubscriptionPlan(
-            $this->getSubscription()->getPriceId(),
-            $this,
-        );
+        $priceId = $this->getSubscription()->getPriceId();
+
+        // If no price ID found, return free plan as fallback
+        if (! $priceId) {
+            return SubscriptionPlan::defaultFreePlan();
+        }
+
+        return Spike::findSubscriptionPlan($priceId, $this);
     }
 
     public function subscriptionRenewalDate(): ?CarbonInterface

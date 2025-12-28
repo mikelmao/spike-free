@@ -132,6 +132,7 @@ class SpikeServiceProvider extends ServiceProvider
         $this->registerPublishing();
         $this->bootComponents();
         $this->bootDirectives();
+        $this->bootModels();
 
         if (!Spike::hasResolver()) {
             $this->registerDefaultSpikeResolver();
@@ -150,6 +151,20 @@ class SpikeServiceProvider extends ServiceProvider
         };
 
         $this->macroViewTests();
+    }
+
+    /**
+     * Configure custom model classes from config.
+     */
+    protected function bootModels(): void
+    {
+        if ($licensePoolModel = config('spike.models.license_pool')) {
+            SpikeManager::useLicensePoolModel($licensePoolModel);
+        }
+
+        if ($licenseAllocationModel = config('spike.models.license_allocation')) {
+            SpikeManager::useLicenseAllocationModel($licenseAllocationModel);
+        }
     }
 
     protected function bootCashierStripe(): void
@@ -296,10 +311,14 @@ class SpikeServiceProvider extends ServiceProvider
             Livewire::component('spike::checkout', CheckoutModal::class);
             Livewire::component('spike::subscribe', SubscribeModal::class);
             Livewire::component('spike::add-payment-method', AddPaymentMethodModal::class);
+            Livewire::component('spike::manage-license', Http\Livewire\ManageLicenseModal::class);
 
             // Extra
             Livewire::component('spike::update-payment-method-paddle', UpdatePaymentMethodPaddle::class);
             Livewire::component('spike::product-checkout-button-paddle', PaddleCheckoutButton::class);
+
+            // Licenses
+            Livewire::component('spike::manage-licenses', Http\Livewire\ManageLicenses::class);
         }
     }
 

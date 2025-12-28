@@ -61,6 +61,16 @@ class SpikeManager
     static array $redirectAfterSubscriptionTo = ['url' => null, 'delay' => 0];
 
     /**
+     * The license pool model class name.
+     */
+    protected static string $licensePoolModel = LicensePool::class;
+
+    /**
+     * The license allocation model class name.
+     */
+    protected static string $licenseAllocationModel = LicenseAllocation::class;
+
+    /**
      * @var string|null
      */
     protected ?string $billableClass = null;
@@ -457,7 +467,7 @@ class SpikeManager
                 config('spike.persist_discounts_when_switching_plans', false)
             );
     }
-    
+
     public function stripeAllowIncompleteSubscriptionUpdates(): bool
     {
         return $this->paymentProvider() === PaymentProvider::Stripe && config(
@@ -465,7 +475,7 @@ class SpikeManager
                 false
             );
     }
-    
+
     /**
      * Register a callback to resolve cancellation offers for a billable model.
      *
@@ -476,7 +486,7 @@ class SpikeManager
     {
         self::$cancellationOfferResolvers[$this->getBillableClass()] = $callback;
     }
-    
+
     /**
      * Get cancellation offers for a billable model.
      *
@@ -493,18 +503,18 @@ class SpikeManager
             } catch (\Exception) {
                 $billableInstance = null;
             }
-            
+
             $billableClass = $this->getBillableClass();
         }
-        
+
         $configOffers = collect(config('spike.stripe.cancellation_offers', []));
-        
+
         if (isset(self::$cancellationOfferResolvers[$billableClass])) {
             return collect(
                 self::$cancellationOfferResolvers[$billableClass]($billableInstance, $configOffers)
             );
         }
-        
+
         return $configOffers;
     }
 
@@ -529,5 +539,53 @@ class SpikeManager
                 ]
             ]
         ];
+    }
+
+    /**
+     * Set the license pool model class name.
+     */
+    public static function useLicensePoolModel(string $model): void
+    {
+        static::$licensePoolModel = $model;
+    }
+
+    /**
+     * Get the license pool model class name.
+     */
+    public static function licensePoolModel(): string
+    {
+        return static::$licensePoolModel;
+    }
+
+    /**
+     * Create a new license pool model instance.
+     */
+    public static function newLicensePoolModel(): LicensePool
+    {
+        return new static::$licensePoolModel;
+    }
+
+    /**
+     * Set the license allocation model class name.
+     */
+    public static function useLicenseAllocationModel(string $model): void
+    {
+        static::$licenseAllocationModel = $model;
+    }
+
+    /**
+     * Get the license allocation model class name.
+     */
+    public static function licenseAllocationModel(): string
+    {
+        return static::$licenseAllocationModel;
+    }
+
+    /**
+     * Create a new license allocation model instance.
+     */
+    public static function newLicenseAllocationModel(): LicenseAllocation
+    {
+        return new static::$licenseAllocationModel;
     }
 }

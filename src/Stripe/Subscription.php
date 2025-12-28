@@ -49,9 +49,39 @@ class Subscription extends \Laravel\Cashier\Subscription implements SpikeSubscri
         return 'stripe_subscription_id';
     }
 
-    public function getPriceId(): string
+    public function getPriceId(): ?string
     {
-        return $this->stripe_price;
+        // If stripe_price is set, use it directly
+        if ($this->stripe_price) {
+            return $this->stripe_price;
+        }
+
+        // For multi-item subscriptions, find the item that matches a configured plan
+        // (not add-ons like licenses or metered items)
+        $configuredPriceIds = collect(config('spike.subscriptions', []))
+            ->flatMap(fn ($plan) => [
+                $plan['payment_provider_price_id'] ?? null,
+                $plan['payment_provider_price_id_monthly'] ?? null,
+                $plan['payment_provider_price_id_yearly'] ?? null,
+                $plan['yearly']['payment_provider_price_id'] ?? null,
+            ])
+            ->filter()
+            ->values()
+            ->all();
+
+        // First, try to find an item that matches a configured plan
+        $planItem = $this->items->first(
+            fn ($item) => in_array($item->stripe_price, $configuredPriceIds)
+        );
+
+        if ($planItem) {
+            return $planItem->stripe_price;
+        }
+
+        // Fall back to the first subscription item's price
+        $firstItem = $this->items->first();
+
+        return $firstItem?->stripe_price;
     }
 
     public function isPastDue(): bool

@@ -16,7 +16,7 @@ interface SpikeSubscription
      */
     public function getBillable();
 
-    public function getPriceId(): string;
+    public function getPriceId(): ?string;
 
     public function isPastDue(): bool;
 

@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Laravel\Paddle\Billable;
 use Opcodes\Spike\SpikeInvoice;
 use Opcodes\Spike\Traits\ManagesCredits;
+use Opcodes\Spike\Traits\ManagesLicenses;
 use Opcodes\Spike\Traits\ManagesPromotionCode;
 use Opcodes\Spike\Traits\ManagesPurchases;
 use Opcodes\Spike\Traits\ManagesSubscriptions;
@@ -22,6 +23,7 @@ trait SpikeBillable
 {
     use Billable;
     use ManagesCredits;
+    use ManagesLicenses;
     use ManagesPurchases;
     use ManagesSubscriptions;
     use ManagesPromotionCode;

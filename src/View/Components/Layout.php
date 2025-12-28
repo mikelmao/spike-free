@@ -56,11 +56,23 @@ class Layout extends Component
                 'needs_attention' => ($subscription?->isPastDue() ?? false)
                     && request()->query('state') !== 'payment-method-updated',
             ] : null,
+            $this->licensesAvailable() ? [
+                'label' => __('spike::translations.licenses'),
+                'route_name' => 'spike.licenses',
+                'icon' => 'spike::icons.shield-checkmark',
+            ] : null,
             [
                 'label' => __('spike::translations.billing'),
                 'route_name' => 'spike.invoices',
                 'icon' => 'spike::icons.wallet-credit-card'
             ],
         ]);
+    }
+
+    protected function licensesAvailable(): bool
+    {
+        $licenseTypes = config('spike.license_types', []);
+
+        return ! empty($licenseTypes);
     }
 }
