@@ -174,7 +174,10 @@ class LicenseManager
     /**
      * Release a license allocation from an entity.
      *
-     * @throws OverAllocationException If releasing would cause bundled license over-allocation
+     * Note: Releasing an allocation returns the license to the pool - it does NOT
+     * reduce the total number of licenses the billable has. Bundled licenses are
+     * only affected when the total license count changes (via setPurchased/setIncluded),
+     * not when allocations are released.
      */
     public function release(Model $allocatable, ?string $slot = null): bool
     {
@@ -185,13 +188,7 @@ class LicenseManager
                 return false;
             }
 
-            // Check if releasing this would cause over-allocation in bundled pools
-            $this->validateBundledLicensesOnRelease();
-
             $allocation->delete();
-
-            // Handle bundled license reduction
-            $this->reduceBundledLicensesOnRelease();
 
             $this->clearCache();
 
@@ -202,11 +199,15 @@ class LicenseManager
     }
 
     /**
-     * Check if releasing a license would be safe (no over-allocation in bundled pools).
+     * Check if releasing a license allocation would be safe.
+     *
+     * Releasing an allocation always succeeds as long as the allocation exists,
+     * since it simply returns the license to the pool without changing the total
+     * number of licenses the billable has.
      */
-    public function canRelease(): bool
+    public function canRelease(Model $allocatable, ?string $slot = null): bool
     {
-        return $this->canRemovePurchased(1);
+        return $this->getAllocation($allocatable, $slot) !== null;
     }
 
     /**
@@ -287,61 +288,6 @@ class LicenseManager
         }
 
         return true;
-    }
-
-    /**
-     * Validate that releasing a license won't cause over-allocation in bundled pools.
-     *
-     * @throws OverAllocationException
-     */
-    protected function validateBundledLicensesOnRelease(): void
-    {
-        $licenseType = $this->getLicenseType();
-        $billable = $this->getBillable();
-        $poolModel = Spike::licensePoolModel();
-
-        foreach ($licenseType->bundles() as $bundledType => $quantityPerLicense) {
-            $bundledPool = $poolModel::query()
-                ->whereBillable($billable)
-                ->whereLicenseType($bundledType)
-                ->first();
-
-            if ($bundledPool) {
-                $newBundledTotal = $bundledPool->bundled - $quantityPerLicense;
-                $newTotal = $bundledPool->included + $bundledPool->purchased + $newBundledTotal;
-
-                if ($bundledPool->allocated() > $newTotal) {
-                    $overBy = $bundledPool->allocated() - $newTotal;
-                    throw new OverAllocationException(
-                        "Cannot release {$licenseType->name()}: {$bundledPool->allocated()} " .
-                        LicenseType::make($bundledType)->name(2) . ' are allocated, ' .
-                        "but only {$newTotal} would remain. Please release {$overBy} " .
-                        LicenseType::make($bundledType)->name($overBy) . ' first.'
-                    );
-                }
-            }
-        }
-    }
-
-    /**
-     * Reduce bundled licenses when a parent license is released.
-     */
-    protected function reduceBundledLicensesOnRelease(): void
-    {
-        $licenseType = $this->getLicenseType();
-        $billable = $this->getBillable();
-        $poolModel = Spike::licensePoolModel();
-
-        foreach ($licenseType->bundles() as $bundledType => $quantityPerLicense) {
-            $bundledPool = $poolModel::query()
-                ->whereBillable($billable)
-                ->whereLicenseType($bundledType)
-                ->first();
-
-            if ($bundledPool && $bundledPool->bundled >= $quantityPerLicense) {
-                $bundledPool->decrement('bundled', $quantityPerLicense);
-            }
-        }
     }
 
     /**
@@ -430,6 +376,7 @@ class LicenseManager
 
     /**
      * Add to the purchased license quantity.
+     * Also updates bundled licenses in child pools based on the new total.
      */
     public function addPurchased(int $quantity): void
     {
@@ -438,11 +385,15 @@ class LicenseManager
 
         $this->clearCache();
 
+        // Sync bundled licenses in child pools
+        $this->syncBundledLicenses();
+
         event(new LicensePoolUpdated($this->getBillable(), $pool, $this->getLicenseType(), 'purchased'));
     }
 
     /**
      * Remove from the purchased license quantity.
+     * Also updates bundled licenses in child pools based on the new total.
      *
      * @throws OverAllocationException
      */
@@ -461,6 +412,9 @@ class LicenseManager
         $pool->decrement('purchased', min($quantity, $pool->purchased));
 
         $this->clearCache();
+
+        // Sync bundled licenses in child pools
+        $this->syncBundledLicenses();
 
         event(new LicensePoolUpdated($this->getBillable(), $pool, $this->getLicenseType(), 'purchased'));
     }
