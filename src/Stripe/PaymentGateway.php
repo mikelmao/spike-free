@@ -62,7 +62,7 @@ class PaymentGateway implements PaymentGatewayContract
 
         if ($cart->hasPromotionCode()) {
             $invoiceOptions['discounts'] = [
-                'coupon' => $cart->promotionCode()->coupon()->id,
+                ['coupon' => $cart->promotionCode()->coupon()->id],
             ];
         }
 
