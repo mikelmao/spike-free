@@ -125,14 +125,17 @@ class PaymentGateway implements PaymentGatewayContract
             $promotionCode = $billable->stripePromotionCode();
             $mandateData = Spike::mandateDataFromRequest();
 
-            $subscription = $billable
+            $subscriptionBuilder = $billable
                 ->newSubscription(self::$subscriptionName, $plan->payment_provider_price_id)
                 ->withPaymentConfirmationOptions($mandateData ? [
                     'mandate_data' => $mandateData,
-                ] : [])
-                ->add([], $promotionCode ? [
-                    'promotion_code' => $promotionCode->id,
                 ] : []);
+
+            if ($promotionCode) {
+                $subscriptionBuilder->withPromotionCode($promotionCode->id);
+            }
+
+            $subscription = $subscriptionBuilder->add([], []);
 
             $subscription->forceFill([
                 'promotion_code_id' => $promotionCode?->id ?? null
@@ -182,9 +185,13 @@ class PaymentGateway implements PaymentGatewayContract
                 ] : [])
                 ->swapAndInvoice($plan->payment_provider_price_id, $options);
 
-            if (array_key_exists('promotion_code', $options)) {
-                $subscription->forceFill(['promotion_code_id' => $options['promotion_code']])->save();
+            if (array_key_exists('discounts', $options)) {
+                $subscription->forceFill([
+                    'promotion_code_id' => $this->extractPromotionCodeIdFromSubscriptionOptions($options),
+                ])->save();
             }
+
+            return $subscription;
         }
 
         if ($requirePaymentCard && ! $existingSubscription->hasPaymentCard()) {
@@ -237,9 +244,13 @@ class PaymentGateway implements PaymentGatewayContract
 
         // Handle promotion codes
         if ($promotionCode && $promotionCode->id !== $existingPromotionCodeId) {
-            $options = ['promotion_code' => $promotionCode->id];
+            $options = [
+                'discounts' => [
+                    ['promotion_code' => $promotionCode->id],
+                ],
+            ];
         } elseif (!$promotionCode && $existingPromotionCodeId && ! $this->stripePersistDiscountsWhenSwitchingPlans()) {
-            $options = ['promotion_code' => null];
+            $options = ['discounts' => ''];
         }
 
         // Add error_if_incomplete to prevent subscription update when payment fails, unless configured otherwise
@@ -248,6 +259,21 @@ class PaymentGateway implements PaymentGatewayContract
         }
 
         return $options;
+    }
+
+    protected function extractPromotionCodeIdFromSubscriptionOptions(array $options): ?string
+    {
+        if (! array_key_exists('discounts', $options) || ! is_array($options['discounts'])) {
+            return null;
+        }
+
+        $firstDiscount = $options['discounts'][0] ?? null;
+
+        if (! is_array($firstDiscount)) {
+            return null;
+        }
+
+        return $firstDiscount['promotion_code'] ?? null;
     }
 
     public function findStripePromotionCode(string $promo_code_id = null): ?PromotionCode
