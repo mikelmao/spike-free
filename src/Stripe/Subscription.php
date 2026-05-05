@@ -6,7 +6,6 @@ use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Laravel\Cashier\Cashier;
 use Laravel\Cashier\PromotionCode;
@@ -111,7 +110,7 @@ class Subscription extends \Laravel\Cashier\Subscription implements SpikeSubscri
 
     public function hasPromotionCode(): bool
     {
-        return !is_null($this->promotionCode());
+        return ! is_null($this->promotionCode());
     }
 
     public function promotionCode(): ?PromotionCode
@@ -143,9 +142,11 @@ class Subscription extends \Laravel\Cashier\Subscription implements SpikeSubscri
         }
 
         if ($this->hasPaymentCard()) {
-            return Carbon::createFromTimestamp(
-                $this->asStripeSubscription()->current_period_end
-            );
+            // Stripe API 2025-03-31.basil moved current_period_end from Subscription to SubscriptionItem.
+            // Cashier's currentPeriodEnd() iterates items and returns the latest period end.
+            return $this->currentPeriodEnd()
+                ?? $this->renews_at
+                ?? $this->created_at->copy()->addMonthNoOverflow();
         }
 
         return $this->renews_at ?? $this->created_at->copy()->addMonthNoOverflow();
